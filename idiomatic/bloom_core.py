@@ -31,25 +31,27 @@ Todo:
   * think about modularity (e.g. the `import` feature of Bud)
 
 """
-
-import argparse
-from os import system
-from os import close
-from sys import stdout
 from collections import defaultdict,OrderedDict
 import pprint
-import tatsu
 from bloom import BloomParser
 
 class BloomSemantics(object):
-  """docstring for BloomSemantics"""
-
+  """Tatsu semantics file for handling different tokens in the grammar
+  """
   schema = {}
   rules = {}
   tups = {}
   tupbuf = []
 
   def start(self, ast):
+    """start of the parser semantics
+
+    Args:
+      ast (str): Tatsu AST
+
+    Returns:
+      str: parsed output, namely C++ code
+    """
     args = { i[0]: i[1] for i in ast.args}
 
     # args
@@ -78,20 +80,33 @@ class BloomSemantics(object):
       retval += ';\n  };\n'
 
     # bootstrap logic
-    retval += self.register_rules('Bootstrap', ast.blogic)
+    retval += self.register_rules(True, ast.blogic)
     # bloom logic
-    retval += self.register_rules('', ast.logic)
+    retval += self.register_rules(False, ast.logic)
 
     # epilogue
     retval += fluent_epilogue(ast.name)
     return retval
 
   def register_rules(self, bootp, rules):
+    """generate the C++ to wrap the rule definitions
+
+    Args:
+      bootp (bool): whether these are bootstrap rules
+
+      rules (str): C++ translation of rules
+
+    Returns:
+      str: C++ code wrapping all the rules passed in
+    """
+
     if rules == None or len(rules) == 0:
       return ''
 
+    bootstr = ("Bootstrap" if bootp else "")
+
     retval = "  bloom = std::move(bloom)\n"
-    retval += "    .Register" + bootp + "Rules([&]("
+    retval += "    .Register" + bootstr + "Rules([&]("
     retval += ", ".join(('auto& ' + k) for k in self.schema.keys())
     retval += ") {\n"
     retval += "\n".join('      (void)' + l + ';' for l in self.schema.keys())
@@ -99,7 +114,7 @@ class BloomSemantics(object):
       using namespace fluent::infix;
 
       //////////////
-      // Bloom ''' + bootp + ''' Rules
+      // Bloom ''' + bootstr + ''' Rules
 '''
     retval += rules
     retval += '      return std::make_tuple('
@@ -111,19 +126,53 @@ class BloomSemantics(object):
 
 
   def logic(self, ast):
+    """convert the logic ast to a single string
+
+    Args:
+      ast (AST): Tatsu AST
+
+    Returns:
+      str: the logic ast as a string
+    """
     return ''.join(ast)
 
   def stmt(self, ast):
+    """wrap a statement as a string
+
+    Args:
+      ast (AST): the ast for the statement
+
+    Returns:
+      str: semicolon-terminated C++ statement
+    """
     if ast != '':
       return '      ' + ast + ';\n'
     else:
       return ast
 
   def ruledef(self, ast):
+    """wrap a rule definition in C++ boilerplate
+
+    Args:
+      ast (AST): the ast for the statement
+
+    Returns:
+      str: properly-typed C++ assignment
+    """
     self.rules[ast.var] = ast.rule
     return "auto " + ast.var + " = " + ast.rule     
 
   def rule(self, ast):
+    """wrap a rule in C++ boilerplate,
+       if the ast has no rhs, this is a rule injecting constant
+       tuples (e.g. in a Bootstrap).
+
+    Args:
+      ast (AST): the ast for the statement
+
+    Returns:
+      str: properly-wrapped C++ assignment
+    """
     if ast.rhs == None:
       self.tups[ast.lhs] = self.tupbuf
       self.tupbuf = []
@@ -132,7 +181,16 @@ class BloomSemantics(object):
       rhs = ast.rhs
     return ast.lhs + ' ' + ast.mtype + ' ' + rhs
 
-  def catalog_entry(self, ast, type):
+  def catalog_entry(self, ast):
+    """handle a simple table/channel reference
+    as a special case, translate stdin to fluin, stdout to fluout
+
+    Args:
+      ast (AST): the ast for the statement
+
+    Returns:
+      str: the catalog entry as a string
+    """
     retval = (''.join(ast))
     if (retval == 'stdin'):
       return 'fluin'
@@ -142,6 +200,14 @@ class BloomSemantics(object):
       return retval
 
   def rhs(self, ast):
+    """wrap the rhs of a rule
+
+    Args:
+      ast (AST): the ast for the statement
+
+    Returns:
+      str: pipe-delimited fluent text
+    """
     retval = "("
     if ast.anchor != None:
       retval += ast.anchor
@@ -156,6 +222,14 @@ class BloomSemantics(object):
     return retval + ")"
     
   def op(self, ast):
+    """wrap a fluent operator
+
+    Args:
+      ast (AST): the ast for the operator
+
+    Returns:
+      str: appropriately-wrapped C++
+    """
     retval = ast.opname
     if ast.plist != None:
       retval += "<" + ','.join(ast.plist) + ">"
@@ -172,6 +246,14 @@ class BloomSemantics(object):
     return(retval)
 
   def opname(self, ast):
+    """wrap an opname
+
+    Args:
+      ast (AST): the ast for the statement
+
+    Returns:
+      str: properly wrapped opname
+    """
     return "lra::" + ast
 
   def rhs_catalog_entry(self, ast):
@@ -196,6 +278,15 @@ class BloomSemantics(object):
     return "-="  
 
   def schemadef(self, ast):
+    """wrap a schema definition.
+    As a special case, translate stdin/stdout to fluin/fluout
+
+    Args:
+      ast (AST): the ast for the statement
+
+    Returns:
+      str: pipe-delimited fluent text
+    """
     if ast.name == 'stdin':
       self.schema['fluin'] = None;
     elif ast.name == 'stdout':
@@ -329,22 +420,3 @@ def fullparse(specFile):
   retval = parser.parse(spec, semantics=sem)
 
   return retval
-
-if __name__ == "__main__":
-  parser = argparse.ArgumentParser("Generate Fluent C++ code from Bloom DSL spec.")
-  parser.add_argument('spec',
-                    help='path to the Bloom DSL spec file')
-  parser.add_argument('-o', '--out',
-                    help='output C++ file')
-
-
-  args = parser.parse_args()
-
-  if (args.out == None):
-    codeFd = stdout
-  else:
-    codeFd = open(args.out, "w")
-
-  result = fullparse(args.spec)
-  codeFd.write(result)
-  codeFd.close()

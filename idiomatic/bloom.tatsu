@@ -41,7 +41,7 @@ rule = lhs:lhs mtype:merge rhs:rhs ;
 
 lhs = catalog_entry;
 
-catalog_entry::string = /[\w_-]+/ ;
+catalog_entry = /[\w_-]+/ ;
 
 merge 
     = 
