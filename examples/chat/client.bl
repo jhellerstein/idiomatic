@@ -1,0 +1,25 @@
+ChatClient(std::string server_address , std::string nickname , std::string address) {
+
+  bootstrap {
+    boot_connect: connect <= [(args.server_address, args.address, args.nickname)];
+  }
+
+  channel connect(
+    std::string server_addr,
+    std::string client_addr,
+    std::string nickname
+  );
+  channel mcast(
+    std::string addr,
+    std::string msg 
+  );
+  stdin;
+  stdout;
+
+  from_in: mcast <= fluin.map(line ```c++
+              {
+                return std::make_tuple(args.server_address,
+                                       std::get<0>(line));
+              }```);
+  to_out: fluout <= mcast.project<1>();
+}

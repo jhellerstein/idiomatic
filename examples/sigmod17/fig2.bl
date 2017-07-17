@@ -1,0 +1,13 @@
+kvs_server(std::string address) {
+  table kvs(std:::string key, std::string value);
+  channel set_req(std::string dst, std::string src, int64_t id,
+                  std::string k, std::string v);
+  channel set_resp(std::string dst, int64_t id);
+  channel get_req(std::string dst, std::string src, int64_t id, 
+                  std::string k);
+
+  get: get_resp <= join<0, 3>(kvs, get_req).project<3, 4, 1>();
+  set_del: kvs <- join<0, 3>(kvs, set_req).project<0, 1>();
+  set_add: kvs <+ set_req.project<3, 4>();
+  set_ack: set_resp <= set_req.project<1, 2>();
+}

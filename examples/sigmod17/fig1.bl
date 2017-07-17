@@ -1,0 +1,10 @@
+hello_server(std::string server_address) {
+  channel req(std::string dst, std::string src);
+  channel resp(std::string dst, std::string hello);
+  table addrs(std::string addr);
+
+  r1: resp <= req.map(t ```c++ 
+        { return tuple<string, string>(get<1>(t), "Hello, World!"); } 
+      ```);
+  r2: addrs <= req.project<1>();
+}

@@ -1,0 +1,2 @@
+tatsu >= 4.2.3
+argparse

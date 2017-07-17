@@ -1,0 +1,15 @@
+redis(std::string address) {
+  channel set_req(std::string dest, std::string src, int64_t id,
+                  std::string k, std::string v);
+  channel set_resp(std::string dst, int64_t id);
+  channel get_req(std::string dst, std::string src, int64_t id,
+                  std::string k);
+  channel get_resp(std::string dst, int64_t id, std::string value);
+
+  get: get_resp <= get_req.map(t ```c++
+         { return {get<1>(t), get<2>(t), redox.get(get<3>(t))} }
+         ```);
+  set: set_resp <= set_req.map(t ```c++
+         { redox.set(get<3>(t), get<4>(t)) }
+         ```);
+}

@@ -1,0 +1,119 @@
+@@grammar::FLUENT
+
+start = name:name '(' args: attrs ')' '{' [blogic:bootstrap] logic:logic '}' $ ;
+
+name = /\w+/;
+
+attrs = ','%{@+:attr}+;
+
+attr = @:type /\s/ @:attrname;
+
+attrname::string = /\w+/ ;
+
+type = /[\w:]+/ ;
+
+logic 
+    =
+    | @:stmt ';' @:logic
+    | @:stmt ';'
+    ;
+
+stmt
+    =
+    | ruledef
+    | schemadef
+    ;
+
+bootstrap = 'bootstrap' '{' @:logic '}';
+
+ruledef = var:rulename ':' rule:rule ;
+
+schemadef = 
+    | type:coll_type name:catalog_entry '(' cols:attrs ')'
+    | name:'stdin' ['(' ')']
+    | name:'stdout' ['(' ')']
+    ;
+
+
+rulename = /[\w_-]+/ ;
+
+rule = lhs:lhs mtype:merge rhs:rhs ;
+
+lhs = catalog_entry;
+
+catalog_entry::string = /[\w_-]+/ ;
+
+merge 
+    = 
+    | now
+    | next
+    | async
+    | delete
+    ;
+
+now = '<=';
+next = '<+';
+async = '<~';
+delete = '<-';
+
+rhs
+    =
+    | anchor:rhs_catalog_entry '.' ~ chain:opchain
+    | chain:opchain
+    | anchor:rhs_catalog_entry
+    | tups:tuple_list
+    ;
+
+rhs_catalog_entry = catalog_entry;
+
+opchain 
+    = '.'%{@+:op}+;
+
+
+op = opname:opname plist:[template_params] '(' op_args:[op_args] ')';
+
+opname
+    =
+    | where
+    | 'project'
+    | 'map'
+    | cross
+    | 'join'
+    | 'groupby'
+    ;
+
+where = 'where';
+
+cross = 'cross';
+
+template_params = '<' ','%{@+:/[\w ]+/}+ '>';
+
+op_args
+    =
+    | argname:/\w+/ code:codeblock
+    | ','%{@:rhs_catalog_entry}+
+    ;
+
+codeblock = "```" lang:lang code:code "```";
+
+code = /[^'```']+/;
+
+lang = 
+    | 'C++'
+    | 'c++'
+    | 'C'
+    | 'c'
+    | 'Python'
+    | 'python'
+    ;
+
+tuple_list = '[' ','%{@+:tuple}+ ']';
+
+tuple = '(' ','%{@+:/[^,)]+/}+ ')';
+
+coll_type =
+    | 'table'
+    | 'channel'
+    | 'scratch'
+    | 'interface'
+    ;
