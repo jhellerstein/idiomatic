@@ -323,7 +323,6 @@ def fullparse(specFile):
     text of the C++ file
   """
   spec = open(specFile).read()
-  grammar = open('bloom.tatsu').read()
   sem = BloomSemantics();
   setattr(sem, "cwrap", "")
   parser = BloomParser()
