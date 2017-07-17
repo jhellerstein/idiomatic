@@ -1,4 +1,4 @@
-@@grammar::FLUENT
+@@grammar::Bloom
 
 start = name:name '(' args: attrs ')' '{' [blogic:bootstrap] logic:logic '}' $ ;
 

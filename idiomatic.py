@@ -39,6 +39,7 @@ from sys import stdout
 from collections import defaultdict,OrderedDict
 import pprint
 import tatsu
+from bloom import BloomParser
 
 class BloomSemantics(object):
   """docstring for BloomSemantics"""
@@ -322,10 +323,10 @@ def fullparse(specFile):
     text of the C++ file
   """
   spec = open(specFile).read()
-  grammar = open('./bloom.tatsu').read()
+  grammar = open('bloom.tatsu').read()
   sem = BloomSemantics();
   setattr(sem, "cwrap", "")
-  parser = tatsu.compile(grammar)
+  parser = BloomParser()
   retval = parser.parse(spec, semantics=sem)
 
   return retval
