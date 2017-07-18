@@ -1,20 +1,20 @@
-# A Bloomly Example
-This directory provides an example of `yml2fluent`. Contents:
+# A Idiomatic Bloom Example
+This directory provides an example of Bloom in `idiomatic`. Contents:
 
 - `chat_client.py`, `chat_server.py`: Python driver programs for the chat client and server
-- `client.yml`, `server.yml`: YAML specifications of the Bloom programs for chat
-- `fluentchat.cc`: a dylib wrapper for the Bloomly code
+- `client.bl`, `server.bl`: Bloom programs for chat
+- `fluentchat.cc`: a dylib wrapper for the Bloom code
 - `Makefile`: a simple Makefile
 
 ## Building the code
 ```bash
-$ python ../../yml2fluent.py client.yml -o client.h
-$ python ../../yml2fluent.py server.yml -o server.h
+$ python ../../idiomatic client.bl -o client.h
+$ python ../../idiomatic server.bl -o server.h
 $ make clean; make
 ```
-Have a look at `client.h` and `server.h`. You should be able to see how the yaml files got embedded into the C++ boilerplate (and translated accordingly).
+Have a look at `client.h` and `server.h`. You should be able to see how the `.bl` files got compiled into the C++ boilerplate.
 
-Also have a look at `fluentchat.cc`, which includes both the `.h` files we built above. Note the conventions for the server arguments (`ChatClientArgs`, `ChatServerArgs`) and server initialization (`ChatClientMain<fluent::lineagedb::NoopClient>(args, config);`, `ChatServerMain<fluent::lineagedb::NoopClient>(sargs, config);`). (You can ignore the `lineagedb` and `config` details -- they aren't relevant to our discussion.)
+Also have a look at `fluentchat.cc`, which includes both of the `.h` files we built above. Note the conventions for the server arguments (`ChatClientArgs`, `ChatServerArgs`) and server initialization (`ChatClientMain<fluent::lineagedb::NoopClient>(args, config);`, `ChatServerMain<fluent::lineagedb::NoopClient>(sargs, config);`). (You can ignore the `lineagedb` and `config` details -- they aren't relevant to our discussion.)
 
 
 ## Running the code:

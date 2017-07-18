@@ -38,10 +38,13 @@ from bloom import BloomParser
 class BloomSemantics(object):
   """Tatsu semantics file for handling different tokens in the grammar
   """
+  boot_state = False
   schema = {}
+  boot_rules = {}
   rules = {}
   tups = {}
   tupbuf = []
+  varnum = 0
 
   def start(self, ast):
     """start of the parser semantics
@@ -52,17 +55,15 @@ class BloomSemantics(object):
     Returns:
       str: parsed output, namely C++ code
     """
-    args = { i[0]: i[1] for i in ast.args}
-
-    # args
-    retval = fluent_prologue(ast.name, args)
+    # prologue
+    retval = self.fluent_prologue(ast.name, ast.args)
 
     # schema
     retval += '''
     ///////////////
     // Bloom Schema
 '''
-    retval += '\n'.join(('    .' + l) for l in translate_schema(self.schema))
+    retval += '\n'.join(('    .' + l) for l in self.translate_schema(self.schema))
     retval += '''
     ///////////////
     ;
@@ -77,16 +78,27 @@ class BloomSemantics(object):
       # then the constant collection
       retval += '  std::vector<' + k + '_tuple_t> ' + k + '_tuples = {\n'
       retval += (';\n'.join('    std::make_tuple(' + ', '.join(a.strip() for a in tup) + ')' for tup in self.tups[k]))
-      retval += ';\n  };\n'
+      retval += '\n  };\n'
 
     # bootstrap logic
-    retval += self.register_rules(True, ast.blogic)
+    retval += self.register_rules(True, ast.boot_logic)
     # bloom logic
     retval += self.register_rules(False, ast.logic)
 
     # epilogue
-    retval += fluent_epilogue(ast.name)
+    retval += self.fluent_epilogue(ast.name)
     return retval
+
+  def attrs(self, ast):
+    return ast
+
+  def set_boot(self, ast):
+    self.boot_state = True
+    return ast
+
+  def unset_boot(self, ast):
+    self.boot_state = False
+    return ast
 
   def register_rules(self, bootp, rules):
     """generate the C++ to wrap the rule definitions
@@ -105,7 +117,9 @@ class BloomSemantics(object):
 
     bootstr = ("Bootstrap" if bootp else "")
 
-    retval = "  bloom = std::move(bloom)\n"
+    retval = "  auto bloom" + str(self.varnum) + " = std::move(bloom" 
+    retval += str(self.varnum - 1) + ")\n"
+    self.varnum += 1
     retval += "    .Register" + bootstr + "Rules([&]("
     retval += ", ".join(('auto& ' + k) for k in self.schema.keys())
     retval += ") {\n"
@@ -118,12 +132,14 @@ class BloomSemantics(object):
 '''
     retval += rules
     retval += '      return std::make_tuple('
-    retval += ", ".join(self.rules.keys()) + ');\n'
+    if (bootp):
+      retval += ", ".join(self.boot_rules.keys()) + ');\n' 
+    else:
+      retval += ", ".join(self.rules.keys()) + ');\n' 
     retval += '''      //////////////
-    })
-'''
+    })'''
+    retval += (";\n" if bootp else "\n")
     return retval
-
 
   def logic(self, ast):
     """convert the logic ast to a single string
@@ -159,7 +175,10 @@ class BloomSemantics(object):
     Returns:
       str: properly-typed C++ assignment
     """
-    self.rules[ast.var] = ast.rule
+    if (self.boot_state):
+      self.boot_rules[ast.var] = ast.rule
+    else:
+      self.rules[ast.var] = ast.rule
     return "auto " + ast.var + " = " + ast.rule     
 
   def rule(self, ast):
@@ -285,7 +304,7 @@ class BloomSemantics(object):
       ast (AST): the ast for the statement
 
     Returns:
-      str: pipe-delimited fluent text
+      nothing, but side effect: sets self.schema
     """
     if ast.name == 'stdin':
       self.schema['fluin'] = None;
@@ -294,114 +313,121 @@ class BloomSemantics(object):
     else:
       collection_type = ast.type
       collection_name = ast.name
-      cols = { i[0]: i[1] for i in ast.cols}
+      cols = { i.attrname: i.type for i in ast.cols}
       self.schema[collection_name] = {
         'type': collection_type,
         'cols': cols
       }
     return ""
 
-def fluent_prologue(name, args):
-  """Generate C++ file preamble.
+  def fluent_prologue(self, name, arguments):
+    """Generate C++ file preamble.
 
-  Args:
-    name (str): project name from the Bloom DSL name key
-    args (list): the Bloom DSL args key, used to pass in runtime configuration arguments
+    Args:
+      name (str): project name from the Bloom DSL name key
+      args (list): the Bloom DSL args key, used to pass in runtime configuration arguments
 
-  Returns:
-    str: C++ code for the top of the generated file
-  """
-  retval = '''#ifndef ''' + str.upper(name) + '''_H_
-#define ''' + str.upper(name) + '''_H_
+    Returns:
+      str: C++ code for the top of the generated file
+    """
+    retval = '''#ifndef ''' + str.upper(name) + '''_H_
+  #define ''' + str.upper(name) + '''_H_
 
-#include <vector>
+  #include <vector>
 
-#include "zmq.hpp"
+  #include "zmq.hpp"
 
-#include "common/status.h"
-#include "fluent/fluent_builder.h"
-#include "fluent/fluent_executor.h"
-#include "fluent/infix.h"
-#include "lineagedb/connection_config.h"
-#include "lineagedb/noop_client.h"
-#include "lineagedb/to_sql.h"
-#include "ra/logical/all.h"
-#include "common/hash_util.h"
+  #include "common/status.h"
+  #include "common/mock_pickler.h"
+  #include "fluent/fluent_builder.h"
+  #include "fluent/fluent_executor.h"
+  #include "fluent/infix.h"
+  #include "lineagedb/connection_config.h"
+  #include "lineagedb/noop_client.h"
+  #include "lineagedb/to_sql.h"
+  #include "ra/logical/all.h"
+  #include "common/hash_util.h"
 
-namespace lra = fluent::ra::logical;
+  namespace lra = fluent::ra::logical;
 
-struct ''' + name + '''Args {
-'''
-  for vari, typei in args.items():
-    retval += "  " + typei + " " + vari + ";\n"
-  retval += '''};
+  struct ''' + name + '''Args {
+  '''
+    for i in arguments:
+      retval += " " + i.type + " " + i.attrname + ";\n"
+    retval += '''};
 
-int ''' + name + '''Main(const ''' + name + '''Args& args) {
-  zmq::context_t context(1);
-  fluent::lineagedb::ConnectionConfig connection_config;
-  auto bloom = fluent::fluent<fluent::lineagedb::NoopClient,fluent::Hash,
-                           fluent::lineagedb::ToSql,fluent::MockPickler,
-                           std::chrono::system_clock>
-                           ("'''
-  retval += name + '''_" + std::to_string(rand()),
-                                    args.address, &context,
-                                    connection_config)
+  int ''' + name + '''Main(const ''' + name + '''Args& args) {
+    zmq::context_t context(1);
+    fluent::lineagedb::ConnectionConfig connection_config;
+    auto bloom''' + str(self.varnum)
+    self.varnum += 1
+    retval += '''= fluent::fluent<fluent::lineagedb::NoopClient,fluent::Hash,
+                             fluent::lineagedb::ToSql,fluent::MockPickler,
+                             std::chrono::system_clock>
+                             ("'''
+    retval += name + '''_" + std::to_string(rand()),
+                                      args.address, &context,
+                                      connection_config)
+      .ConsumeValueOrDie();
+    auto bloom''' + str(self.varnum);
+    retval += ''' = std::move(bloom''' + str(self.varnum - 1)
+    self.varnum += 1
+    retval += ")\n"
+    return retval
+
+  def fluent_epilogue(self, name):
+    """Generate C++ file postamble.
+
+    Args:
+      name (str): project name from the Bloom DSL name key
+
+    Returns:
+      str: C++ code for the bottom of the generated file
+    """
+
+    retval = '''
     .ConsumeValueOrDie();
-  bloom = std::move(bloom)
-'''
-  return retval
+      fluent::Status status = std::move(bloom'''
+    retval += str(self.varnum - 1) + ''').Run();
+      CHECK_EQ(fluent::Status::OK, status);
 
-def fluent_epilogue(name):
-  """Generate C++ file postamble.
+      return 0;
+  }
 
-  Args:
-    name (str): project name from the Bloom DSL name key
+  #endif  // ''' + str.upper(name) + '''_H_
+  '''
+    return retval
 
-  Returns:
-    str: C++ code for the bottom of the generated file
-  """
+  def translate_schema(self, sdict):
+    """convert Bloom DSL schema to a list of Fluent C++ collection definitions
 
-  return '''
-  .ConsumeValueOrDie();
-    fluent::Status status = std::move(bloom).Run();
-    CHECK_EQ(fluent::Status::OK, status);
+    Args:
+      sdict (dict): Bloom DSL entries for collection definitions
 
-    return 0;
-}
-
-#endif  // ''' + str.upper(name) + '''_H_
-'''
-
-def translate_schema(sdict):
-  """convert Bloom DSL schema to a list of Fluent C++ collection definitions
-
-  Args:
-    sdict (dict): Bloom DSL entries for collection definitions
-
-  Returns:
-    list of str: list with entries with one of the following forms:
-      "stdin()"
-      "stdout()"
-      "template collection_type <type1,...>(collection_name, {{name1, ...}})"
-  """
-  result = []
-  for name, defn in sdict.items():
-    # we ignore the definition for stdin and stdout
-    if (name == 'fluin'):
-      result.append('stdin' + '()')
-    elif name == 'fluout':
-      result.append('stdout' + '()')
-    else:
-      collection_type = defn['type']
-      collection_name = name
-      cols = defn['cols']
-      colnames = ('"' + col + '"' for col in cols.keys())
-      coltypes = cols.values()
-      str = "template " + collection_type + "<"
-      str += ", ".join(coltypes) + ">("
-      str += '"' + collection_name + '", {{' + ', '.join(colnames) + '}})'
-      result.append(str)
-  return result
+    Returns:
+      list of str: list with entries with one of the following forms:
+        "stdin()"
+        "stdout()"
+        "template collection_type <type1,...>(collection_name, {{name1, ...}})"
+    """
+    result = []
+    for name, defn in sdict.items():
+      # we ignore the definition for stdin and stdout
+      if (name == 'fluin'):
+        result.append('stdin' + '()')
+      elif name == 'fluout':
+        result.append('stdout' + '()')
+      else:
+        collection_type = defn['type']
+        collection_name = name
+        cols = defn['cols']
+        colnames = ('"' + col + '"' for col in cols.keys())
+        coltypes = cols.values()
+        str = "template " + collection_type + "<"
+        str += ", ".join(coltypes) + ">("
+        str += '"' + collection_name + '", {{' + ', '.join(colnames) + '}})'
+        result.append(str)
+    return result
 
 
 def fullparse(specFile):
@@ -415,7 +441,7 @@ def fullparse(specFile):
   """
   spec = open(specFile).read()
   sem = BloomSemantics();
-  setattr(sem, "cwrap", "")
+  setattr(sem, "cwrap", "lra::make_collection")
   parser = BloomParser()
   retval = parser.parse(spec, semantics=sem)
 

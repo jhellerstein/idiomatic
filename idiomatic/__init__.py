@@ -1,0 +1,1 @@
+from .bloom_core import fullparse

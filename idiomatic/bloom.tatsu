@@ -1,12 +1,12 @@
 @@grammar::Bloom
 
-start = name:name '(' args: attrs ')' '{' [blogic:bootstrap] logic:logic '}' $ ;
+start = name:name '(' args: attrs ')' '{' set_boot [boot_logic:bootstrap] unset_boot logic:mainrules '}' $ ;
 
 name = /\w+/;
 
 attrs = ','%{@+:attr}+;
 
-attr = @:type /\s/ @:attrname;
+attr = type:type /\s/ attrname:attrname ;
 
 attrname::string = /\w+/ ;
 
@@ -24,7 +24,14 @@ stmt
     | schemadef
     ;
 
+# these states are here simply to allow the semantics to know
+# when the bootstrap state is entered and when the logic state is entered
+set_boot = () ;
+unset_boot = () ;
+
 bootstrap = 'bootstrap' '{' @:logic '}';
+
+mainrules = @:logic ;
 
 ruledef = var:rulename ':' rule:rule ;
 
