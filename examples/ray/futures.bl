@@ -10,10 +10,10 @@
 # 4. Non-collection vars
 # 5. Monotonic move through tables vs monotonic status in same table?
 # 6. The "consuming" symmetric hashjoin, and shortcutting build of second arrival.
-
-
 FutureServer(std::string address) {
+  ###################
   ## Request handling: accept, respond, increment id
+  ###################
   channel invoke_req(
     std::string server_addr,
     std::string client_addr,
@@ -32,18 +32,23 @@ FutureServer(std::string address) {
   table sequence(
     int64_t val;
   );
+
   # tag request with sequence number and store in todo
   accept: todo <+ cross(invoke_req, sequence).project<1,2,3>();
+  
   # respond to request
   respond: invoke_resp <~ cross(invoke_req, sequence).project<1,3>();
-  # bump the sequence number, assume only one request for now.
+  
+  # bump the sequence number, assume only one request at a time for now.
   # following two rules should be replaced by a counter lattice increment
   increment_add: sequence <+ cross(sequence, invoke_req).map(t ```c++ {
        return std::get<0>(t)+1;
      }```);
   increment_del: sequence <- sequence;
 
+  ###################
   ## Process computation: send to compute thread, mark pending
+  ###################
   channel compute_req(
     int32_t id,
     std::string code
@@ -59,7 +64,9 @@ FutureServer(std::string address) {
   make_pending_add: pending <+ todo;
   make_pending_del: todo <- todo;
 
+  ###################
   ## Handle thread completion: remove from pending, place in done
+  ###################
   channel compute_resp(
     int32_t id,
     std::string result
@@ -72,10 +79,11 @@ FutureServer(std::string address) {
 
   # Note: could shortcut the done table if we get a join on waiting
   finish_compute: done <+ join<0,2>(compute_resp, pending).project<2,0,1>();
-  pending_del: todo <- join<0,2>(compute_resp, pending).project<2,3,4>();;
+  pending_del: todo <- join<0,2>(compute_resp, pending).project<2,3,4>();
 
-
+  ###################
   ## register waiting threads
+  ###################
   channel wait(
     std::string client_addr,
     int32_t id
@@ -87,7 +95,9 @@ FutureServer(std::string address) {
   # Note: could shortcut the waiting table if we get a join on done
   register_wait: waiting <= wait;
 
+  ###################
   ## Result! Join up waiting and done, send result, delete from waiting & done
+  ###################
   channel invoke_result(
     std::string client_addr,
     int32_t id,

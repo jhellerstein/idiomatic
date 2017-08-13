@@ -1,3 +1,4 @@
+# Brief notes on [Ray](http://ray.readthedocs.io/en/latest/)
 # async do
 @ray.remote(num_return_vals=2)
 def f():

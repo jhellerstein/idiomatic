@@ -1,4 +1,6 @@
 @@grammar::Bloom
+@@comments :: /\(\*.*?\*\)/
+@@eol_comments :: /#.*?$/
 
 start = name:name '(' args: attrs ')' '{' set_boot [boot_logic:bootstrap] unset_boot logic:mainrules '}' $ ;
 
