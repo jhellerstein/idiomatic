@@ -1,0 +1,72 @@
+# async do
+@ray.remote(num_return_vals=2)
+def f():
+    return 1, 2
+
+# SO: remote decorator registers an invocation of the function and 
+# returns a handle. We need to (a) assign the function an ID and return it, (b) pickle the function, (c) store it in a to_be_serviced table, (d) eventually execute it, (e) route the result to a symmetric ``consuming'' hash join with get requests
+
+x_id, y_id = f.remote()
+ray.get(x_id)  # 1
+ray.get(y_id)  # 2
+
+# get should (a) route a get request to a ``consuming'' hash join with function results, (b) sleep the calling thread as needed, (c) ensure the calling thread wakes up on join success
+
+# Simple version: 
+# Futures server:
+# - ignore python -- static C++ function invocation and just the dataflows
+# - single-node to start
+# - ID assignment
+# - scheduling (how many functions per tick??)
+# - ``consuming'' hash join pattern
+
+
+
+@ray.remote
+def f():
+    return {'key1': ['value']}
+
+# Get one object ID.
+ray.get(f.remote())  # {'key1': ['value']}
+
+# Get a list of object IDs.
+ray.get([f.remote() for _ in range(2)])  # [{'key1': ['value']}, {'key1': ['value']}]
+
+############
+# Waiting
+import time
+import numpy as np
+
+@ray.remote
+def f(n):
+    time.sleep(n)
+    return n
+
+# Start 3 tasks with different durations.
+results = [f.remote(i) for i in range(3)]
+# Block until 2 of them have finished.
+ready_ids, remaining_ids = ray.wait(results, num_returns=2)
+
+# Start 5 tasks with different durations.
+results = [f.remote(i) for i in range(3)]
+# Block until 4 of them have finished or 2.5 seconds pass.
+ready_ids, remaining_ids = ray.wait(results, num_returns=4, timeout=2500)
+
+##############
+# Actors
+@ray.remote
+class Counter(object):
+    def __init__(self):
+        self.value = 0
+
+    def increment(self):
+        self.value += 1
+        return self.value
+
+
+a1 = Counter.remote()
+a2 = Counter.remote()
+
+a1.increment.remote()  # ray.get returns 1
+a2.increment.remote()  # ray.get returns 1
+
