@@ -7,6 +7,9 @@ This directory provides an example of Bloom in `idiomatic`. Contents:
 - `Makefile`: a simple Makefile
 
 ## Building the code
+This project currently requires Python 3, and the TatSu parser library (`pip install tatsu`).
+
+You will need to have the [fluent](https://github.com/ucbrise/fluent) library installed and built, and the `FLUENT_DIR` environment variable set to the root of that repo in your filesystem.
 ```bash
 $ python ../../idiomatic client.bl -o client.h
 $ python ../../idiomatic server.bl -o server.h
